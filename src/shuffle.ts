@@ -29,6 +29,14 @@ interface SpotifyTokenResponse {
     scope: string;
 }
 
+interface SpotifyDeviceObject{
+    id: string;
+    is_active: boolean;
+    is_restricted: boolean;
+    name: string;
+    type: string;
+}
+
 
 //route handlers/////////////////////////////////////////////////
 
@@ -94,12 +102,18 @@ app.get('/callback', async function(req, res) {
 app.get('/shuffle', async (req, res) => {
 
     try {
-        res.send("Shuffling");
+        let devices: SpotifyDeviceObject[] = await getDevices();
+        if (devices.length == 0){
+            res.send(`No Device Found`);
+            return;
+        }
+
+        res.send(`${devices[0]?.name}`);
 
     } 
     catch (error: unknown) {
         handleError(error, "/shuffle");
-        res.status(500).send("Server error in /songs");
+        res.status(500).send("Server error in /shuffle");
     }
 });
 
@@ -143,4 +157,24 @@ function handleError(error: unknown, source: string){
         console.error('An unknown error occurred:', error);
     } 
     console.error(`From: ${source}`);
+}
+
+//gets all active instances of Spotify (must be open or playing music)
+async function getDevices(): Promise<SpotifyDeviceObject[]> {
+    let devices: SpotifyDeviceObject[] = [];
+    try {
+        const response = await axios.get('https://api.spotify.com/v1/me/player/devices', {
+            headers: {
+                Authorization: `Bearer ${access_token}`
+            }
+        });
+
+        devices = response.data.devices;
+        return devices;
+
+    } catch (error: unknown) {
+        handleError(error, "Devices");
+    }
+
+    return devices;
 }
