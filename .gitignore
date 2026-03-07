@@ -13,6 +13,7 @@ build/
 # Logs
 *.log
 npm-debug.log*
+out/
 
 # OS files
 .DS_Store
