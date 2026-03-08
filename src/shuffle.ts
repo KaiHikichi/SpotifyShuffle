@@ -151,10 +151,12 @@ app.get('/shuffle', async (req, res) => {
 
     try {
 
-        let allPlaylistTracks: SpotifyTrack[] = await getAllPlaylistTracks(req, res, playlist_id);
-        await shufflePlaylist(playlist_id, allPlaylistTracks.length);
+        await clearPlaylist(playlist_id);
+        let allSavedTracks: SpotifyTrack[] = await getAllSavedTracks(req, res);
+        let shuffledTracks = shuffleArray(allSavedTracks);
+        await appendAllPlaylist(playlist_id, shuffledTracks);
+
         res.send(`Shuffled`);
-        console.log("done");
 
     } 
     catch (error: unknown) {
@@ -187,8 +189,8 @@ app.get('/update', async (req, res) => {
         res.send(`Updated`);
     } 
     catch (error: unknown) {
-        handleError(error, "/clear");
-        res.status(500).send("Server error in /clear");
+        handleError(error, "/update");
+        res.status(500).send("Server error in /update");
     }
 });
 
@@ -417,6 +419,9 @@ async function appendAllPlaylist(playlist_id: string, tracks: SpotifyTrack[]){
     }
 } 
 
+/* 
+uses too many api calls
+
 async function shufflePlaylist(playlist_id: string, length: number){
     let body = {
         range_start: 0,
@@ -451,7 +456,8 @@ async function shufflePlaylist(playlist_id: string, length: number){
         interval_min += 1;
         body.range_start = getRandomInt(interval_min, length - 1);
     }
-}
+} 
+*/
 
 async function clearPlaylist(playlist_id: string){
     let body = {
@@ -484,6 +490,16 @@ function printTracks(tracks: SpotifyTrack[], fileName: string){
         i++;
     });
 
+}
+
+//shuffle array
+function shuffleArray<SpotifyTrack>(arr: SpotifyTrack[]): SpotifyTrack[] {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i]!, arr[j]!] = [arr[j]!, arr[i]!];
+    }
+
+    return arr;
 }
 
 function handleError(error: unknown, source: string){
