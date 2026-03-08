@@ -136,13 +136,12 @@ app.get('/callback', async function(req, res) {
 app.get('/shuffle', async (req, res) => {
 
     try {
-        res.send(`Reading...`);
 
+        let allPlaylistTracks: SpotifyTrack[] = await getAllPlaylistTracks(req, res, playlist_id);
 
+        await shufflePlaylist(playlist_id, allPlaylistTracks.length);
 
-
-        
-        
+        res.send(`Playlist shuffled`);
 
     } 
     catch (error: unknown) {
@@ -354,7 +353,7 @@ async function appendToPlaylist(playlist_id: string, tracks: SpotifyTrack[]) {
         });
 
     } catch (error: unknown) {
-        handleError(error, "Append");
+        handleError(error, "append");
     }
 }
 
@@ -373,6 +372,42 @@ async function appendAllPlaylist(playlist_id: string, tracks: SpotifyTrack[]){
         temp = tracks.slice(offset);
     }
 } 
+
+async function shufflePlaylist(playlist_id: string, length: number){
+    let body = {
+        range_start: 0,
+        insert_before: 0,
+        range_length: 1
+    }
+    let interval_min: number = 0;
+    body.range_start = getRandomInt(interval_min, length - 1);
+
+    let inBounds = true;
+    while(inBounds){
+        try {
+            const response = await axios.put(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, body, {
+                headers: {
+                    Authorization: `Bearer ${access_token}`,
+                    "Content-Type": "application/json"
+                }
+            });
+
+        } catch (error: unknown) {
+            //handle out of bounds error
+            if (axios.isAxiosError(error) && error.response?.status == 400) {
+                inBounds = false;
+            }
+            else{
+                handleError(error, "shuffle");
+            }
+        }
+
+        interval_min += 1;
+        body.range_start = getRandomInt(interval_min, length - 1);
+    }
+
+    
+}
 
 
 
@@ -412,6 +447,13 @@ function generateRandomString(length: number) {
     text += possible.charAt(Math.floor(Math.random() * possible.length));
   }
   return text;
+}
+
+//can return values of max and min
+function getRandomInt(min: number, max: number) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 // pause for ms milliseconds
