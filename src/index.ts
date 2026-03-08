@@ -8,7 +8,7 @@ dotenv.config();
 const client_id = process.env.client_id ?? '';
 const client_secret = process.env.client_secret ?? '';
 //const playlist_id = process.env.playlist_id ?? '';
-const playlist_id = '4d3BQUdCNhgBOKbNde214u';
+let playlist_id = '4d3BQUdCNhgBOKbNde214u';
 const port = process.env.PORT ?? 8888;
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -83,6 +83,11 @@ interface SpotifyPlaylistTrackObject{
     item: SpotifyTrack;
 }
 
+interface SpotifyPlaylist {
+    id: string;
+    name: string;
+}
+
 
 //route handlers/////////////////////////////////////////////////
 
@@ -152,7 +157,7 @@ app.get('/home', async (req, res) => {
 
     try {
 
-        res.send(`Home Page!`);
+        res.sendFile('home.html', { root: './src' });
 
     } 
     catch (error: unknown) {
@@ -163,6 +168,11 @@ app.get('/home', async (req, res) => {
 
 //shuffle page
 app.get('/shuffle', async (req, res) => {
+
+    const playlist_id = req.query.playlist_id;
+    if (!playlist_id || typeof playlist_id !== 'string') {
+        return res.status(400).send('Missing playlist_id');
+    }
 
     try {
 
@@ -209,6 +219,20 @@ app.get('/update', async (req, res) => {
     }
 });
 
+//playlist page
+app.get('/playlists', async (req, res) => {
+
+    try {
+        const playlists = await getUserPlaylists();
+        res.json(playlists);
+
+    } 
+    catch (error: unknown) {
+        handleError(error, "/playlists");
+        res.status(500).send("Server error in /playlists");
+    }
+});
+
 
 
 
@@ -242,7 +266,16 @@ async function getDevices(): Promise<SpotifyDeviceObject[]> {
         return devices;
 
     } catch (error: unknown) {
-        handleError(error, "Devices");
+        if (axios.isAxiosError(error) && error.response?.status == 429) {
+            const retryAfterHeader = error.response?.headers['retry-after'];
+            const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+            console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks.`);
+            await sleep(waitSeconds * 1000);
+            return await getDevices();
+        }
+        else{
+            handleError(error, "Devices");
+        }
     }
 
     return devices;
@@ -414,7 +447,16 @@ async function appendToPlaylist(playlist_id: string, tracks: SpotifyTrack[]) {
         });
 
     } catch (error: unknown) {
-        handleError(error, "append");
+        if (axios.isAxiosError(error) && error.response?.status == 429) {
+            const retryAfterHeader = error.response?.headers['retry-after'];
+            const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+            console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks.`);
+            await sleep(waitSeconds * 1000);
+            await appendToPlaylist(playlist_id, tracks);
+        }
+        else{
+            handleError(error, "append");
+        }
     }
 }
 
@@ -488,12 +530,46 @@ async function clearPlaylist(playlist_id: string){
             });
 
         } catch (error: unknown) {
-            handleError(error, "clear");
+            if (axios.isAxiosError(error) && error.response?.status == 429) {
+                const retryAfterHeader = error.response?.headers['retry-after'];
+                const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+                console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks.`);
+                await sleep(waitSeconds * 1000);
+                await clearPlaylist(playlist_id);
+            }
+            else{
+                handleError(error, "clear");
+            }
         }
 }
 
+// get all of the current user's playlists
+async function getUserPlaylists(): Promise<SpotifyPlaylist[]> {
+    let playlists: SpotifyPlaylist[] = [];
+    let offset = 0;
 
+    while (true) {
+        const response = await axios.get('https://api.spotify.com/v1/me/playlists', {
+            headers: { Authorization: `Bearer ${access_token}` },
+            params: { limit: 50, offset: offset }
+        });
 
+        const items: SpotifyPlaylist[] = response.data.items.map((p: any) => ({
+            id: p.id,
+            name: p.name
+        }));
+
+        playlists.push(...items);
+
+        if (response.data.next) {
+            offset += 50;
+        } else {
+            break;
+        }
+    }
+
+    return playlists;
+}
 
 //print tracks to fileName
 function printTracks(tracks: SpotifyTrack[], fileName: string){

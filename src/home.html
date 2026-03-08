@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>True Shuffle</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+        --bg: #f7f6f2;
+        --fg: #1a1a1a;
+        --muted: #333333;
+        --border: #e0ddd6;
+        --hover-bg: #1a1a1a;
+        --hover-fg: #f7f6f2;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg: #141414;
+            --fg: #dddada;
+            --muted: #333333;
+            --border: #2a2a2a;
+            --hover-bg: #f0ede8;
+            --hover-fg: #141414;
+        }
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 420px;
+      animation: fadeUp 0.5s ease both;
+    }
+
+    .header {
+      margin-bottom: 3rem;
+    }
+
+    .label {
+      font-family: 'DM Mono', monospace;
+      font-size: 2rem;
+      font-weight: 400;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--fg);
+      margin-bottom: 0.75rem;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 300;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.1rem 1.4rem;
+      border: 1px solid var(--border);
+      background: white;
+      color: #2e2e2e;
+      text-decoration: none;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 400;
+      cursor: pointer;
+      transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+      border-radius: 4px;
+    }
+
+    .btn:hover {
+      background: var(--hover-bg);
+      color: var(--hover-fg);
+      border-color: var(--hover-bg);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .footer {
+      margin-top: 3rem;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    .select-wrapper {
+        margin-bottom: 1.5rem;
+    }
+
+    select {
+        width: 100%;
+        padding: 0.9rem 1.1rem;
+        border: 1px solid var(--border);
+        background: white;
+        color: #2e2e2e;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 1rem;
+        border-radius: 4px;
+        appearance: none;
+        cursor: pointer;
+        outline: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1.1rem center;
+        padding-right: 2.5rem;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+
+
+
+
+
+
+<body>
+    <div class="container">
+        <div class="header">
+            <p class="label">True Shuffle</p>
+        </div>
+
+        <div class="select-wrapper">
+            <select id="playlist-select" disabled>
+                <option>Select playlists...</option>
+            </select>
+        </div>
+
+        <div class="actions">
+            <button class="btn" id="btn-shuffle" disabled>
+                <span>Shuffle</span>
+            </button>
+        </div>
+    </div>
+
+
+
+
+
+
+
+    <script>
+        const select = document.getElementById('playlist-select');
+
+        async function loadPlaylists() {
+            const res = await fetch('/playlists');
+            const playlists = await res.json();
+
+            select.innerHTML = '';
+            playlists.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id;
+                option.textContent = p.name;
+                select.appendChild(option);
+            });
+
+            select.disabled = false;
+            document.getElementById('btn-shuffle').disabled = false;
+        }
+
+        document.getElementById('btn-shuffle').addEventListener('click', function() {
+            const playlistId = select.value;
+            window.location.href = `/shuffle?playlist_id=${playlistId}`;
+        });
+
+        loadPlaylists();
+    </script>
+</body>
+</html>
