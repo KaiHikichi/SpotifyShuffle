@@ -136,7 +136,10 @@ app.get('/callback', async function(req, res) {
         );
 
         access_token = response.data.access_token;
-        res.redirect('http://127.0.0.1:8888/home');
+        const homeUrl = isProduction
+            ? 'https://spotifyshuffle-production.up.railway.app/home'
+            : 'http://127.0.0.1:8888/home';
+        res.redirect(homeUrl);
     } 
     catch (error: unknown) {
         handleError(error, "/callback");
@@ -153,8 +156,8 @@ app.get('/home', async (req, res) => {
 
     } 
     catch (error: unknown) {
-        handleError(error, "/shuffle");
-        res.status(500).send("Server error in /shuffle");
+        handleError(error, "/home");
+        res.status(500).send("Server error in /home");
     }
 });
 
