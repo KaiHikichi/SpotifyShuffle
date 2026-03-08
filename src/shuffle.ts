@@ -138,13 +138,8 @@ app.get('/shuffle', async (req, res) => {
     try {
         res.send(`Reading...`);
 
-        let allSavedTracks: SpotifyTrack[] = await getAllSavedTracks(req, res);
-        printTracks(allSavedTracks, "out/saved.txt");
 
-        let allPlaylistTracks: SpotifyTrack[] = await getAllPlaylistTracks(req, res, playlist_id);
-        printTracks(allPlaylistTracks, "out/playlist.txt");
 
-        
 
         
         
@@ -330,7 +325,7 @@ async function getAllPlaylistTracks(req: express.Request, res: express.Response,
 async function appendToPlaylist(playlist_id: string, tracks: SpotifyTrack[]) {
 
     if(tracks.length == 0){ 
-        throw new Error('No tracks to append"');
+        throw new Error('No tracks to append');
     }
 
     //get array of track uris
@@ -361,8 +356,23 @@ async function appendToPlaylist(playlist_id: string, tracks: SpotifyTrack[]) {
     } catch (error: unknown) {
         handleError(error, "Append");
     }
-
 }
+
+async function appendAllPlaylist(playlist_id: string, tracks: SpotifyTrack[]){
+    if(tracks.length == 0){ 
+        throw new Error('No tracks to append');
+    }
+
+    let offset: number = 0;
+    let temp: SpotifyTrack[] = tracks.slice(0);
+
+    //append batches in 100
+    while(temp.length > 0){
+        await appendToPlaylist(playlist_id, temp);
+        offset = offset + 100;
+        temp = tracks.slice(offset);
+    }
+} 
 
 
 
