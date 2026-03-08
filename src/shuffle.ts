@@ -136,13 +136,17 @@ app.get('/callback', async function(req, res) {
 app.get('/shuffle', async (req, res) => {
 
     try {
+        res.send(`Reading...`);
+
         let allSavedTracks: SpotifyTrack[] = await getAllSavedTracks(req, res);
         printTracks(allSavedTracks, "out/saved.txt");
 
-        let allPlaylisttracks: SpotifyTrack[] = await getAllPlaylistTracks(req, res, playlist_id);
-        printTracks(allPlaylisttracks, "out/playlist.txt");
+        let allPlaylistTracks: SpotifyTrack[] = await getAllPlaylistTracks(req, res, playlist_id);
+        printTracks(allPlaylistTracks, "out/playlist.txt");
 
-        res.send(`Reading...`);
+        
+
+        
         
 
     } 
@@ -261,18 +265,6 @@ async function getAllSavedTracks(req: express.Request, res: express.Response): P
     return allTracks;
 }
 
-//print tracks to fileName
-function printTracks(tracks: SpotifyTrack[], fileName: string){
-
-    let i = 1
-    fs.writeFileSync(fileName, "Songs:\n");
-    tracks.forEach(item => {
-        fs.appendFileSync(fileName, `${i}: ${item.name}\n`);
-        i++;
-    });
-
-}
-
 //get 50 tracks from playlist
 //offset: integer denoting where to start reading from saved library
 //playlist_id: id of spotify playlist to read from
@@ -333,10 +325,59 @@ async function getAllPlaylistTracks(req: express.Request, res: express.Response,
     return allTracks;
 }
 
+//appends a max of 100 items to a playlist
+//if an item already exists in playlist it will be added again
+async function appendToPlaylist(playlist_id: string, tracks: SpotifyTrack[]) {
+
+    if(tracks.length == 0){ 
+        throw new Error('No tracks to append"');
+    }
+
+    //get array of track uris
+    let uris: string[] = []; 
+    let counter = 0
+    tracks.forEach(item => {
+        if ( counter >= 100){
+            return true;
+        }
+        uris.push(item.uri);
+        counter++;
+    });
+
+    let body = {
+        uris: uris,
+    }
+
+    try {
+        const response = await axios.post(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, body, {
+            headers: {
+                Authorization: `Bearer ${access_token}`
+            },
+            params: {
+                playlist_id: playlist_id,
+            }
+        });
+
+    } catch (error: unknown) {
+        handleError(error, "Append");
+    }
+
+}
 
 
 
 
+//print tracks to fileName
+function printTracks(tracks: SpotifyTrack[], fileName: string){
+
+    let i = 1
+    fs.writeFileSync(fileName, "Songs:\n");
+    tracks.forEach(item => {
+        fs.appendFileSync(fileName, `${i}: ${item.name}\n`);
+        i++;
+    });
+
+}
 
 function handleError(error: unknown, source: string){
     if (axios.isAxiosError(error)) {
