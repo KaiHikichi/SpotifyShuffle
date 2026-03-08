@@ -5,20 +5,32 @@ import * as fs from "fs";
 import dotenv from "dotenv";
 dotenv.config();
 
-
-const client_id = 'e3a553fd98884511a92136d15b9c1cf3';
-const client_secret = process.env.client_secret;
-const redirect_uri = 'http://127.0.0.1:8888/callback';
+const client_id = process.env.client_id ?? '';
+const client_secret = process.env.client_secret ?? '';
+//const playlist_id = process.env.playlist_id ?? '';
 const playlist_id = '4d3BQUdCNhgBOKbNde214u';
+const port = process.env.PORT ?? 8888;
+
+const isProduction = process.env.NODE_ENV === 'production';
+const redirect_uri = isProduction
+    ? 'https://spotifyshuffle-production.up.railway.app/callback'
+    : 'http://127.0.0.1:8888/callback';
+
 let access_token = '';
-const port = 8888;
 
 
 //run the server
 const app = express();
-app.listen(port, '127.0.0.1', () => {
-  console.log(`Server running at http://127.0.0.1:${port}`);
-});
+
+if (isProduction) {
+    app.listen(port, () => {
+        console.log(`Server running on port ${port}`);
+    });
+} else {
+    app.listen(Number(port), '127.0.0.1', () => {
+        console.log(`Server running at http://127.0.0.1:${port}`);
+    });
+}
 
 //interfaces////////////////////////////////////////////////////////////////////////////////
 interface SpotifyTokenResponse {
@@ -356,7 +368,7 @@ async function getAllPlaylistTracks(req: express.Request, res: express.Response,
             allTracks.push(item);
         });
         offset = offset + 50;
-        tempTracks = await getSavedTracks(offset);
+        tempTracks = await getPlaylistTracks(offset, playlist_id);
     }
     tempTracks.forEach(item => {
         allTracks.push(item);
