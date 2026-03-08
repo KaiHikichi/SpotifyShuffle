@@ -124,11 +124,25 @@ app.get('/callback', async function(req, res) {
         );
 
         access_token = response.data.access_token;
-        res.redirect('http://127.0.0.1:8888/shuffle');
+        res.redirect('http://127.0.0.1:8888/home');
     } 
     catch (error: unknown) {
         handleError(error, "/callback");
         res.status(500).send("Server error in /callback");
+    }
+});
+
+//home page
+app.get('/home', async (req, res) => {
+
+    try {
+
+        res.send(`Home Page!`);
+
+    } 
+    catch (error: unknown) {
+        handleError(error, "/shuffle");
+        res.status(500).send("Server error in /shuffle");
     }
 });
 
@@ -138,10 +152,9 @@ app.get('/shuffle', async (req, res) => {
     try {
 
         let allPlaylistTracks: SpotifyTrack[] = await getAllPlaylistTracks(req, res, playlist_id);
-
         await shufflePlaylist(playlist_id, allPlaylistTracks.length);
-
-        res.send(`Playlist shuffled`);
+        res.send(`Shuffled`);
+        console.log("done");
 
     } 
     catch (error: unknown) {
@@ -149,6 +162,37 @@ app.get('/shuffle', async (req, res) => {
         res.status(500).send("Server error in /shuffle");
     }
 });
+
+//clear page
+app.get('/clear', async (req, res) => {
+
+    try {
+
+        await clearPlaylist(playlist_id);
+        res.send(`Cleared`);
+
+    } 
+    catch (error: unknown) {
+        handleError(error, "/clear");
+        res.status(500).send("Server error in /clear");
+    }
+});
+
+//update page
+app.get('/update', async (req, res) => {
+
+    try {
+        let allSavedTracks = await getAllSavedTracks(req, res);
+        await appendAllPlaylist(playlist_id, allSavedTracks);
+        res.send(`Updated`);
+    } 
+    catch (error: unknown) {
+        handleError(error, "/clear");
+        res.status(500).send("Server error in /clear");
+    }
+});
+
+
 
 
 
@@ -382,8 +426,8 @@ async function shufflePlaylist(playlist_id: string, length: number){
     let interval_min: number = 0;
     body.range_start = getRandomInt(interval_min, length - 1);
 
-    let inBounds = true;
-    while(inBounds){
+    let counter: number = 0;
+    while(interval_min < length){
         try {
             const response = await axios.put(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, body, {
                 headers: {
@@ -393,20 +437,38 @@ async function shufflePlaylist(playlist_id: string, length: number){
             });
 
         } catch (error: unknown) {
-            //handle out of bounds error
-            if (axios.isAxiosError(error) && error.response?.status == 400) {
-                inBounds = false;
+            if (axios.isAxiosError(error) && error.response?.status == 429) {
+                const retryAfterHeader = error.response?.headers['retry-after'];
+                const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+                console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks. At track: ${interval_min}`);
+                await sleep(waitSeconds * 1000);
             }
             else{
-                handleError(error, "shuffle");
-            }
+                handleError(error, "Shuffle");
+            }   
         }
 
         interval_min += 1;
         body.range_start = getRandomInt(interval_min, length - 1);
     }
+}
 
-    
+async function clearPlaylist(playlist_id: string){
+    let body = {
+        uris: []
+    }
+
+    try {
+            const response = await axios.put(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, body, {
+                headers: {
+                    Authorization: `Bearer ${access_token}`,
+                    "Content-Type": "application/json"
+                }
+            });
+
+        } catch (error: unknown) {
+            handleError(error, "clear");
+        }
 }
 
 
