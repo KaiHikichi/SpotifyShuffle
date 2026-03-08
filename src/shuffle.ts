@@ -64,6 +64,13 @@ interface SpotifyTrackObject {
     track: SpotifyTrack;
 }
 
+interface SpotifyPlaylistTrackObject{
+    added_at: string;
+    added_by: object;
+    is_local: boolean;
+    item: SpotifyTrack;
+}
+
 
 //route handlers/////////////////////////////////////////////////
 
@@ -129,8 +136,13 @@ app.get('/callback', async function(req, res) {
 app.get('/shuffle', async (req, res) => {
 
     try {
-        let allTracks: SpotifyTrack[] = await getAllSavedTracks(req, res);
-        printTracks(allTracks, "out/songs.txt");
+        let allSavedTracks: SpotifyTrack[] = await getAllSavedTracks(req, res);
+        printTracks(allSavedTracks, "out/saved.txt");
+
+        let allPlaylisttracks: SpotifyTrack[] = await getAllPlaylistTracks(req, res, playlist_id);
+        printTracks(allPlaylisttracks, "out/playlist.txt");
+
+        res.send(`Reading...`);
         
 
     } 
@@ -260,6 +272,71 @@ function printTracks(tracks: SpotifyTrack[], fileName: string){
     });
 
 }
+
+//get 50 tracks from playlist
+//offset: integer denoting where to start reading from saved library
+//playlist_id: id of spotify playlist to read from
+async function getPlaylistTracks(offset: number, playlist_id: string): Promise<SpotifyTrack[]> {
+    let tracks: SpotifyTrack[] = [];
+
+    try {
+        const response = await axios.get(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, {
+            headers: {
+                Authorization: `Bearer ${access_token}`
+            },
+            params: {
+                limit: 50,
+                offset: offset
+            }
+        });
+
+        let trackList: SpotifyPlaylistTrackObject[] = response.data.items;
+        
+        trackList.forEach(t => {
+            tracks.push(t.item);
+        });
+
+    } catch (error: unknown) {
+        if (axios.isAxiosError(error) && error.response?.status == 429) {
+            const retryAfterHeader = error.response?.headers['retry-after'];
+            const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+            console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks.`);
+            await sleep(waitSeconds * 1000);
+            return await getPlaylistTracks(offset, playlist_id);
+        }
+        else{
+            handleError(error, "Tracks");
+        }   
+    }
+    return tracks;
+}
+
+//put all songs in user's liked songs in an array
+//playlist_id: id of spotify playlist to read from
+async function getAllPlaylistTracks(req: express.Request, res: express.Response, playlist_id: string): Promise<SpotifyTrack[]> {
+    let offset = 0;
+    let allTracks: SpotifyTrack[] = [];
+    let tempTracks = await getPlaylistTracks(offset, playlist_id);
+
+    while(tempTracks.length == 50){
+        //push each track to allTracks array
+        tempTracks.forEach(item => {
+            allTracks.push(item);
+        });
+        offset = offset + 50;
+        tempTracks = await getSavedTracks(offset);
+    }
+    tempTracks.forEach(item => {
+        allTracks.push(item);
+    });
+
+    return allTracks;
+}
+
+
+
+
+
 
 function handleError(error: unknown, source: string){
     if (axios.isAxiosError(error)) {
