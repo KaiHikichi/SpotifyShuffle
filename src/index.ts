@@ -147,7 +147,7 @@ app.get('/callback', async function(req, res) {
         res.redirect(homeUrl);
     } 
     catch (error: unknown) {
-        handleError(error, "/callback");
+        handleError(error);
         res.status(500).send("Server error in /callback");
     }
 });
@@ -161,7 +161,7 @@ app.get('/home', async (req, res) => {
 
     } 
     catch (error: unknown) {
-        handleError(error, "/home");
+        handleError(error);
         res.status(500).send("Server error in /home");
     }
 });
@@ -176,16 +176,16 @@ app.get('/shuffle', async (req, res) => {
 
     try {
 
-        await clearPlaylist(playlist_id);
-        let allSavedTracks: SpotifyTrack[] = await getAllSavedTracks(req, res);
-        let shuffledTracks = shuffleArray(allSavedTracks);
+        let allPlaylistTracks: SpotifyTrack[] = await getAllPlaylistTracks(playlist_id);
+        await withRetry(() => clearPlaylist(playlist_id));        
+        let shuffledTracks = shuffleArray(allPlaylistTracks);
         await appendAllPlaylist(playlist_id, shuffledTracks);
 
         res.send(`Shuffled`);
 
     } 
     catch (error: unknown) {
-        handleError(error, "/shuffle");
+        handleError(error);
         res.status(500).send("Server error in /shuffle");
     }
 });
@@ -195,12 +195,12 @@ app.get('/clear', async (req, res) => {
 
     try {
 
-        await clearPlaylist(playlist_id);
+        await withRetry(() => clearPlaylist(playlist_id));
         res.send(`Cleared`);
 
     } 
     catch (error: unknown) {
-        handleError(error, "/clear");
+        handleError(error);
         res.status(500).send("Server error in /clear");
     }
 });
@@ -209,12 +209,14 @@ app.get('/clear', async (req, res) => {
 app.get('/update', async (req, res) => {
 
     try {
-        let allSavedTracks = await getAllSavedTracks(req, res);
+
+        let allSavedTracks: SpotifyTrack[] = await getAllSavedTracks();
         await appendAllPlaylist(playlist_id, allSavedTracks);
         res.send(`Updated`);
+
     } 
     catch (error: unknown) {
-        handleError(error, "/update");
+        handleError(error);
         res.status(500).send("Server error in /update");
     }
 });
@@ -223,12 +225,12 @@ app.get('/update', async (req, res) => {
 app.get('/playlists', async (req, res) => {
 
     try {
-        const playlists = await getUserPlaylists();
+        const playlists = await withRetry(() => getUserPlaylists());
         res.json(playlists);
 
     } 
     catch (error: unknown) {
-        handleError(error, "/playlists");
+        handleError(error);
         res.status(500).send("Server error in /playlists");
     }
 });
@@ -255,29 +257,14 @@ app.get('/playlists', async (req, res) => {
 //gets all active instances of Spotify (must be open or playing music)
 async function getDevices(): Promise<SpotifyDeviceObject[]> {
     let devices: SpotifyDeviceObject[] = [];
-    try {
-        const response = await axios.get('https://api.spotify.com/v1/me/player/devices', {
-            headers: {
-                Authorization: `Bearer ${access_token}`
-            }
-        });
 
-        devices = response.data.devices;
-        return devices;
-
-    } catch (error: unknown) {
-        if (axios.isAxiosError(error) && error.response?.status == 429) {
-            const retryAfterHeader = error.response?.headers['retry-after'];
-            const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
-            console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks.`);
-            await sleep(waitSeconds * 1000);
-            return await getDevices();
+    const response = await axios.get('https://api.spotify.com/v1/me/player/devices', {
+        headers: {
+            Authorization: `Bearer ${access_token}`
         }
-        else{
-            handleError(error, "Devices");
-        }
-    }
+    });
 
+    devices = response.data.devices;
     return devices;
 }
 
@@ -295,46 +282,30 @@ async function getSavedTracks(offset: number): Promise<SpotifyTrack[]> {
     } 
     let tracks: SpotifyTrack[] = [];
 
-    try {
-        const response = await axios.get('https://api.spotify.com/v1/me/tracks', {
-            headers: {
-                Authorization: `Bearer ${access_token}`
-            },
-            params: {
-                limit: 50,
-                offset: offset
-            }
-        });
-
-        trackList = response.data;
-
-        trackList.items.forEach(t => {
-            tracks.push(t.track);
-        });
-
-    } catch (error: unknown) {
-        //handle API rate limits
-        if (axios.isAxiosError(error) && error.response?.status == 429) {
-            const retryAfterHeader = error.response?.headers['retry-after'];
-            const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
-            console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks.`);
-            await sleep(waitSeconds * 1000);
-            return await getSavedTracks(offset);
+    const response = await axios.get('https://api.spotify.com/v1/me/tracks', {
+        headers: {
+            Authorization: `Bearer ${access_token}`
+        },
+        params: {
+            limit: 50,
+            offset: offset
         }
-        else{
-            handleError(error, "Tracks");
-        }
-        
-        
-    }
+    });
+
+    trackList = response.data;
+
+    trackList.items.forEach(t => {
+        tracks.push(t.track);
+    });
+
     return tracks;
 }
 
 //put all songs in user's liked songs in an array
-async function getAllSavedTracks(req: express.Request, res: express.Response): Promise<SpotifyTrack[]> {
+async function getAllSavedTracks(): Promise<SpotifyTrack[]> {
     let offset = 0;
     let allTracks: SpotifyTrack[] = [];
-    let tempTracks = await getSavedTracks(offset);
+    let tempTracks = await withRetry(() => getSavedTracks(offset));
 
     //push each batch of 50
     while(tempTracks.length == 50){
@@ -343,7 +314,7 @@ async function getAllSavedTracks(req: express.Request, res: express.Response): P
             allTracks.push(item);
         });
         offset = offset + 50;
-        tempTracks = await getSavedTracks(offset);
+        tempTracks = await withRetry(() => getSavedTracks(offset));
     }
     //push final batch
     tempTracks.forEach(item => {
@@ -359,41 +330,29 @@ async function getAllSavedTracks(req: express.Request, res: express.Response): P
 async function getPlaylistTracks(offset: number, playlist_id: string): Promise<SpotifyTrack[]> {
     let tracks: SpotifyTrack[] = [];
 
-    try {
-        const response = await axios.get(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, {
-            headers: {
-                Authorization: `Bearer ${access_token}`
-            },
-            params: {
-                limit: 50,
-                offset: offset
-            }
-        });
 
-        let trackList: SpotifyPlaylistTrackObject[] = response.data.items;
-        
-        trackList.forEach(t => {
-            tracks.push(t.item);
-        });
-
-    } catch (error: unknown) {
-        if (axios.isAxiosError(error) && error.response?.status == 429) {
-            const retryAfterHeader = error.response?.headers['retry-after'];
-            const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
-            console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks.`);
-            await sleep(waitSeconds * 1000);
-            return await getPlaylistTracks(offset, playlist_id);
+    const response = await axios.get(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, {
+        headers: {
+            Authorization: `Bearer ${access_token}`
+        },
+        params: {
+            limit: 50,
+            offset: offset
         }
-        else{
-            handleError(error, "Tracks");
-        }   
-    }
+    });
+
+    let trackList: SpotifyPlaylistTrackObject[] = response.data.items;
+    
+    trackList.forEach(t => {
+        tracks.push(t.item);
+    });
+
     return tracks;
 }
 
 //put all songs in user's liked songs in an array
 //playlist_id: id of spotify playlist to read from
-async function getAllPlaylistTracks(req: express.Request, res: express.Response, playlist_id: string): Promise<SpotifyTrack[]> {
+async function getAllPlaylistTracks(playlist_id: string): Promise<SpotifyTrack[]> {
     let offset = 0;
     let allTracks: SpotifyTrack[] = [];
     let tempTracks = await getPlaylistTracks(offset, playlist_id);
@@ -436,28 +395,14 @@ async function appendToPlaylist(playlist_id: string, tracks: SpotifyTrack[]) {
         uris: uris,
     }
 
-    try {
-        const response = await axios.post(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, body, {
-            headers: {
-                Authorization: `Bearer ${access_token}`
-            },
-            params: {
-                playlist_id: playlist_id,
-            }
-        });
-
-    } catch (error: unknown) {
-        if (axios.isAxiosError(error) && error.response?.status == 429) {
-            const retryAfterHeader = error.response?.headers['retry-after'];
-            const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
-            console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks.`);
-            await sleep(waitSeconds * 1000);
-            await appendToPlaylist(playlist_id, tracks);
+    const response = await axios.post(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, body, {
+        headers: {
+            Authorization: `Bearer ${access_token}`
+        },
+        params: {
+            playlist_id: playlist_id,
         }
-        else{
-            handleError(error, "append");
-        }
-    }
+    });
 }
 
 async function appendAllPlaylist(playlist_id: string, tracks: SpotifyTrack[]){
@@ -470,7 +415,7 @@ async function appendAllPlaylist(playlist_id: string, tracks: SpotifyTrack[]){
 
     //append batches in 100
     while(temp.length > 0){
-        await appendToPlaylist(playlist_id, temp);
+        await withRetry(() => appendToPlaylist(playlist_id, temp));
         offset = offset + 100;
         temp = tracks.slice(offset);
     }
@@ -521,26 +466,13 @@ async function clearPlaylist(playlist_id: string){
         uris: []
     }
 
-    try {
-            const response = await axios.put(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, body, {
-                headers: {
-                    Authorization: `Bearer ${access_token}`,
-                    "Content-Type": "application/json"
-                }
-            });
-
-        } catch (error: unknown) {
-            if (axios.isAxiosError(error) && error.response?.status == 429) {
-                const retryAfterHeader = error.response?.headers['retry-after'];
-                const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
-                console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks.`);
-                await sleep(waitSeconds * 1000);
-                await clearPlaylist(playlist_id);
-            }
-            else{
-                handleError(error, "clear");
-            }
+    const response = await axios.put(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, body, {
+        headers: {
+            Authorization: `Bearer ${access_token}`,
+            "Content-Type": "application/json"
         }
+    });
+
 }
 
 // get all of the current user's playlists
@@ -593,7 +525,7 @@ function shuffleArray<SpotifyTrack>(arr: SpotifyTrack[]): SpotifyTrack[] {
     return arr;
 }
 
-function handleError(error: unknown, source: string){
+function handleError(error: unknown){
     if (axios.isAxiosError(error)) {
         if (error.response) {
             console.error("API call failed:", error.response?.data || error.message);
@@ -606,7 +538,34 @@ function handleError(error: unknown, source: string){
     else {
         console.error('An unknown error occurred:', error);
     } 
-    console.error(`From: ${source}`);
+}
+
+async function withRetry<T>(fn: () => Promise<T>, retries: number = 10) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            return await fn();
+        } 
+        catch (error: unknown) {
+            if (axios.isAxiosError(error)) {
+                const isRateLimit = error.status === 429 || error.message?.includes("Too Many Requests");
+
+                if (isRateLimit && attempt < retries) {
+
+                    const retryAfterHeader = error.response?.headers['retry-after'];
+                    const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 5;
+                    console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks.`);
+                    await sleep(waitSeconds * 1000);
+
+                } else {
+                    throw error;
+                }
+            } 
+            else {
+                throw error;
+            } 
+        }
+    }
+    throw new Error("Max retries reached");
 }
 
 function generateRandomString(length: number) {
