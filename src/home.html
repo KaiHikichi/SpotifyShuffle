@@ -100,6 +100,47 @@
       transform: translateY(0);
     }
 
+    /* Success state */
+    .btn.success {
+      border-color: #3a9e6f;
+      color: #3a9e6f;
+      background: white;
+      cursor: default;
+      transform: none;
+    }
+
+    .btn.success:hover {
+      background: white;
+      color: #3a9e6f;
+      border-color: #3a9e6f;
+      transform: none;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .btn.success {
+        background: transparent;
+      }
+      .btn.success:hover {
+        background: transparent;
+      }
+    }
+
+    .checkmark {
+      display: none;
+      width: 20px;
+      height: 20px;
+      stroke: #3a9e6f;
+      stroke-width: 2.5;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .btn.success .checkmark {
+      display: block;
+      animation: checkPop 0.3s ease both;
+    }
+
     .footer {
       margin-top: 3rem;
       font-family: 'DM Mono', monospace;
@@ -130,6 +171,44 @@
         padding-right: 2.5rem;
     }
 
+    .topbar {
+        position: fixed;
+        top: 1.5rem;
+        left: 1.5rem;
+    }
+
+    .user-chip {
+        font-family: 'DM Mono', monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        color: var(--fg);
+        padding: 0.4rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 99px;
+        text-transform: uppercase;
+    }
+
+    .login-btn {
+        font-family: 'DM Mono', monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 0.4rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 99px;
+        background: none;
+        color: var(--fg);
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.18s ease, color 0.18s ease;
+    }
+
+    .login-btn:hover {
+        background: var(--hover-bg);
+        color: var(--hover-fg);
+        border-color: var(--hover-bg);
+    }
+
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(16px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -139,13 +218,18 @@
       from { transform: rotate(0deg); }
       to   { transform: rotate(360deg); }
     }
+
+    @keyframes checkPop {
+      from { opacity: 0; transform: scale(0.6); }
+      to   { opacity: 1; transform: scale(1); }
+    }
   </style>
 </head>
 
-
-
-
-
+<div class="topbar">
+    <a id="login-btn" class="login-btn" href="/login">Login</a>
+    <span id="user-chip" class="user-chip" style="display:none"></span>
+</div>
 
 <body>
     <div class="container">
@@ -161,19 +245,29 @@
 
         <div class="actions">
             <button class="btn" id="btn-shuffle" disabled>
-                <span>Shuffle</span>
+                <span id="btn-label">Shuffle</span>
+                <svg class="checkmark" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
             </button>
         </div>
     </div>
 
-
-
-
-
-
-
     <script>
         const select = document.getElementById('playlist-select');
+        const btnShuffle = document.getElementById('btn-shuffle');
+        const btnLabel = document.getElementById('btn-label');
+
+        async function loadUser() {
+            const res = await fetch('/user');
+            const data = await res.json();
+            if (data.loggedIn) {
+                document.getElementById('login-btn').style.display = 'none';
+                const chip = document.getElementById('user-chip');
+                chip.textContent = data.display_name;
+                chip.style.display = 'inline-block';
+            }
+        }
 
         async function loadPlaylists() {
             const res = await fetch('/playlists');
@@ -188,10 +282,27 @@
             });
 
             select.disabled = false;
-            document.getElementById('btn-shuffle').disabled = false;
+            btnShuffle.disabled = false;
         }
 
-        document.getElementById('btn-shuffle').addEventListener('click', function() {
+        loadUser();
+
+        // Check if we just came back from a successful shuffle
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('shuffled') === '1') {
+            btnLabel.textContent = 'Shuffled';
+            btnShuffle.classList.add('success');
+            btnShuffle.disabled = true;
+
+            // Reset after 3 seconds
+            setTimeout(() => {
+                btnLabel.textContent = 'Shuffle';
+                btnShuffle.classList.remove('success');
+                btnShuffle.disabled = false;
+            }, 3000);
+        }
+
+        btnShuffle.addEventListener('click', function() {
             const playlistId = select.value;
             window.location.href = `/shuffle?playlist_id=${playlistId}`;
         });
@@ -199,4 +310,7 @@
         loadPlaylists();
     </script>
 </body>
+
+
+
 </html>

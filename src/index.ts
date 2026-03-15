@@ -41,6 +41,12 @@ interface SpotifyTokenResponse {
     scope: string;
 }
 
+interface SpotifyProfile {
+    display_name: string;
+    email: string;
+    id: string;
+}
+
 interface SpotifyDeviceObject{
     id: string;
     is_active: boolean;
@@ -181,7 +187,10 @@ app.get('/shuffle', async (req, res) => {
         let shuffledTracks = shuffleArray(allPlaylistTracks);
         await appendAllPlaylist(playlist_id, shuffledTracks);
 
-        res.send(`Shuffled`);
+        const homeUrl = isProduction
+            ? 'https://spotifyshuffle-production.up.railway.app/home'
+            : 'http://127.0.0.1:8888/home';
+        res.redirect(`${homeUrl}?shuffled=1`);
 
     } 
     catch (error: unknown) {
@@ -190,13 +199,41 @@ app.get('/shuffle', async (req, res) => {
     }
 });
 
+//user page
+app.get('/user', async (req, res) => {
+
+    if (!access_token) {
+        return res.json({ loggedIn: false });
+    }
+    try {
+        const response = await axios.get('https://api.spotify.com/v1/me', {
+            headers: { Authorization: `Bearer ${access_token}` }
+        });
+        res.json({ loggedIn: true, display_name: response.data.display_name });
+    } catch (error: unknown) {
+        res.json({ loggedIn: false });
+    }
+
+});
+
 //clear page
 app.get('/clear', async (req, res) => {
 
-    try {
+    const playlist_id = req.query.playlist_id;
+    if (!playlist_id || typeof playlist_id !== 'string') {
+        return res.status(400).send('Missing playlist_id');
+    }
 
+    try {
+        res.send("under construction");
+/* 
         await withRetry(() => clearPlaylist(playlist_id));
-        res.send(`Cleared`);
+        
+        const homeUrl = isProduction
+            ? 'https://spotifyshuffle-production.up.railway.app/home'
+            : 'http://127.0.0.1:8888/home';
+        res.redirect(homeUrl);
+         */
 
     } 
     catch (error: unknown) {
@@ -209,11 +246,13 @@ app.get('/clear', async (req, res) => {
 app.get('/update', async (req, res) => {
 
     try {
+        res.send("under construction");
 
+        /* 
         let allSavedTracks: SpotifyTrack[] = await getAllSavedTracks();
         await appendAllPlaylist(playlist_id, allSavedTracks);
         res.send(`Updated`);
-
+ */
     } 
     catch (error: unknown) {
         handleError(error);
@@ -266,6 +305,25 @@ async function getDevices(): Promise<SpotifyDeviceObject[]> {
 
     devices = response.data.devices;
     return devices;
+}
+
+//get user profile
+async function getProfile(): Promise<SpotifyProfile> {
+    var profile: SpotifyProfile = {
+        display_name: "",
+        email: "",
+        id: " "
+    } 
+
+    const response = await axios.get<SpotifyProfile>('https://api.spotify.com/v1/me', {
+        headers: {
+            Authorization: `Bearer ${access_token}`
+        }
+    });
+
+    profile = response.data;
+
+    return profile;
 }
 
 //get 50 liked songs ( returns songs either sorted by recently added )
