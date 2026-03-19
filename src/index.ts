@@ -101,7 +101,7 @@ interface SpotifyPlaylist {
 app.get('/login', (req, res) => {
 
     const state = generateRandomString(16);
-    const scope = 'user-read-private user-read-email user-library-read user-modify-playback-state user-read-playback-state playlist-modify-private playlist-modify-public playlist-read-private';
+    const scope = 'user-read-private user-read-email user-library-read playlist-modify-private playlist-modify-public playlist-read-private';
 
     res.redirect(
         'https://accounts.spotify.com/authorize?' +
@@ -233,7 +233,7 @@ app.get('/clear', async (req, res) => {
 
     try {
         res.send("under construction");
-/* 
+        /* 
         await withRetry(() => clearPlaylist(playlist_id));
         
         const homeUrl = isProduction
@@ -259,7 +259,7 @@ app.get('/update', async (req, res) => {
         let allSavedTracks: SpotifyTrack[] = await getAllSavedTracks();
         await appendAllPlaylist(playlist_id, allSavedTracks);
         res.send(`Updated`);
- */
+        */
     } 
     catch (error: unknown) {
         handleError(error);
@@ -485,46 +485,6 @@ async function appendAllPlaylist(playlist_id: string, tracks: SpotifyTrack[]){
         temp = tracks.slice(offset);
     }
 } 
-
-/* 
-uses too many api calls
-
-async function shufflePlaylist(playlist_id: string, length: number){
-    let body = {
-        range_start: 0,
-        insert_before: 0,
-        range_length: 1
-    }
-    let interval_min: number = 0;
-    body.range_start = getRandomInt(interval_min, length - 1);
-
-    let counter: number = 0;
-    while(interval_min < length){
-        try {
-            const response = await axios.put(`https://api.spotify.com/v1/playlists/${playlist_id}/items`, body, {
-                headers: {
-                    Authorization: `Bearer ${access_token}`,
-                    "Content-Type": "application/json"
-                }
-            });
-
-        } catch (error: unknown) {
-            if (axios.isAxiosError(error) && error.response?.status == 429) {
-                const retryAfterHeader = error.response?.headers['retry-after'];
-                const waitSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
-                console.warn(`Rate limited. Wait for ${waitSeconds} seconds before retrying get saved tracks. At track: ${interval_min}`);
-                await sleep(waitSeconds * 1000);
-            }
-            else{
-                handleError(error, "Shuffle");
-            }   
-        }
-
-        interval_min += 1;
-        body.range_start = getRandomInt(interval_min, length - 1);
-    }
-} 
-*/
 
 async function clearPlaylist(playlist_id: string){
     let body = {
