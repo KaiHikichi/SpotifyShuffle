@@ -158,6 +158,13 @@ app.get('/callback', async function(req, res) {
     }
 });
 
+app.get('/', (req, res) => {
+    const homeUrl = isProduction
+        ? 'https://spotifyshuffle-production.up.railway.app/home'
+        : 'http://127.0.0.1:8888/home';
+    res.redirect(`${homeUrl}?shuffled=0`);
+});
+
 //home page
 app.get('/home', async (req, res) => {
 
