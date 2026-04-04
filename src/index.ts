@@ -167,6 +167,9 @@ app.get('/callback', async function(req, res) {
 
         req.session.access_token = response.data.access_token;
 
+        console.log('Token set in callback:', req.session.access_token);
+        console.log('Session ID in callback:', req.sessionID);
+
         const homeUrl = isProduction
             ? 'https://spotifyshuffle-production.up.railway.app/home'
             : 'http://127.0.0.1:8888/home';
@@ -233,6 +236,8 @@ app.get('/shuffle', async (req, res) => {
 
 //user page
 app.get('/user', async (req, res) => {
+    console.log('Session ID:', req.sessionID);
+    console.log('Access token:', req.session.access_token);
 
     if (!req.session.access_token) {
         return res.json({ loggedIn: false });
