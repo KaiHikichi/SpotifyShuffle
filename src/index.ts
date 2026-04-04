@@ -164,10 +164,16 @@ app.get('/callback', async function(req, res) {
         );
 
         req.session.access_token = response.data.access_token;
+
         const homeUrl = isProduction
             ? 'https://spotifyshuffle-production.up.railway.app/home'
             : 'http://127.0.0.1:8888/home';
-        res.redirect(homeUrl);
+
+        req.session.save((err) => {
+            if (err) console.error('Session save error:', err);
+            res.redirect(homeUrl);
+        });
+        
     } 
     catch (error: unknown) {
         handleError(error);
