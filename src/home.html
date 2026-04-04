@@ -259,7 +259,7 @@
         const btnLabel = document.getElementById('btn-label');
 
         async function loadUser() {
-            const res = await fetch('/user');
+            const res = await fetch('/user', { credentials: 'include' });
             const data = await res.json();
             if (data.loggedIn) {
                 document.getElementById('login-btn').style.display = 'none';
@@ -270,7 +270,7 @@
         }
 
         async function loadPlaylists() {
-            const res = await fetch('/playlists');
+            const res = await fetch('/playlists', { credentials: 'include' });
             const playlists = await res.json();
 
             select.innerHTML = '';
