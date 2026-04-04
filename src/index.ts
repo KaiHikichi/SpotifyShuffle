@@ -30,23 +30,17 @@ app.use(session({
     secret: process.env.client_secret ?? '',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: isProduction }
+    cookie: { 
+        secure: false,
+        httpOnly: true,
+        sameSite: 'lax'
+    }
 }));
 
 declare module 'express-session' {
     interface SessionData {
         access_token: string;
     }
-}
-
-if (isProduction) {
-    app.listen(port, () => {
-        console.log(`Server running on port ${port}`);
-    });
-} else {
-    app.listen(Number(port), '127.0.0.1', () => {
-        console.log(`Server running at http://127.0.0.1:${port}`);
-    });
 }
 
 
@@ -317,7 +311,15 @@ app.get('/playlists', async (req, res) => {
 
 
 
-
+if (isProduction) {
+    app.listen(port, () => {
+        console.log(`Server running on port ${port}`);
+    });
+} else {
+    app.listen(Number(port), '127.0.0.1', () => {
+        console.log(`Server running at http://127.0.0.1:${port}`);
+    });
+}
 
 
 
