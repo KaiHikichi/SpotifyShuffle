@@ -26,16 +26,6 @@ const redirect_uri = isProduction
 //run the server
 const app = express();
 
-if (isProduction) {
-    app.listen(port, () => {
-        console.log(`Server running on port ${port}`);
-    });
-} else {
-    app.listen(Number(port), '127.0.0.1', () => {
-        console.log(`Server running at http://127.0.0.1:${port}`);
-    });
-}
-
 app.use(session({
     secret: process.env.client_secret ?? '',
     resave: false,
@@ -48,6 +38,18 @@ declare module 'express-session' {
         access_token: string;
     }
 }
+
+if (isProduction) {
+    app.listen(port, () => {
+        console.log(`Server running on port ${port}`);
+    });
+} else {
+    app.listen(Number(port), '127.0.0.1', () => {
+        console.log(`Server running at http://127.0.0.1:${port}`);
+    });
+}
+
+
 
 //interfaces////////////////////////////////////////////////////////////////////////////////
 interface SpotifyTokenResponse {
@@ -173,7 +175,7 @@ app.get('/callback', async function(req, res) {
             if (err) console.error('Session save error:', err);
             res.redirect(homeUrl);
         });
-        
+
     } 
     catch (error: unknown) {
         handleError(error);
