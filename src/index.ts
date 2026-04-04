@@ -4,6 +4,11 @@ import querystring from 'querystring';
 import * as fs from "fs";
 import dotenv from "dotenv";
 dotenv.config();
+import session from 'express-session';
+
+
+
+
 
 const client_id = process.env.client_id ?? '';
 const client_secret = process.env.client_secret ?? '';
@@ -16,7 +21,6 @@ const redirect_uri = isProduction
     ? 'https://spotifyshuffle-production.up.railway.app/callback'
     : 'http://127.0.0.1:8888/callback';
 
-let access_token = '';
 
 
 //run the server
@@ -30,6 +34,19 @@ if (isProduction) {
     app.listen(Number(port), '127.0.0.1', () => {
         console.log(`Server running at http://127.0.0.1:${port}`);
     });
+}
+
+app.use(session({
+    secret: process.env.client_secret ?? '',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: isProduction }
+}));
+
+declare module 'express-session' {
+    interface SessionData {
+        access_token: string;
+    }
 }
 
 //interfaces////////////////////////////////////////////////////////////////////////////////
@@ -146,7 +163,7 @@ app.get('/callback', async function(req, res) {
         }
         );
 
-        access_token = response.data.access_token;
+        req.session.access_token = response.data.access_token;
         const homeUrl = isProduction
             ? 'https://spotifyshuffle-production.up.railway.app/home'
             : 'http://127.0.0.1:8888/home';
@@ -189,10 +206,10 @@ app.get('/shuffle', async (req, res) => {
 
     try {
 
-        let allPlaylistTracks: SpotifyTrack[] = await getAllPlaylistTracks(playlist_id);
-        await withRetry(() => clearPlaylist(playlist_id));        
+        let allPlaylistTracks: SpotifyTrack[] = await getAllPlaylistTracks(playlist_id, req.session.access_token ?? '');
+        await withRetry(() => clearPlaylist(playlist_id, req.session.access_token ?? ''));        
         let shuffledTracks = shuffleArray(allPlaylistTracks);
-        await appendAllPlaylist(playlist_id, shuffledTracks);
+        await appendAllPlaylist(playlist_id, shuffledTracks, req.session.access_token ?? '');
 
         const homeUrl = isProduction
             ? 'https://spotifyshuffle-production.up.railway.app/home'
@@ -209,12 +226,12 @@ app.get('/shuffle', async (req, res) => {
 //user page
 app.get('/user', async (req, res) => {
 
-    if (!access_token) {
+    if (!req.session.access_token) {
         return res.json({ loggedIn: false });
     }
     try {
         const response = await axios.get('https://api.spotify.com/v1/me', {
-            headers: { Authorization: `Bearer ${access_token}` }
+            headers: { Authorization: `Bearer ${req.session.access_token}` }
         });
         res.json({ loggedIn: true, display_name: response.data.display_name });
     } catch (error: unknown) {
@@ -271,7 +288,7 @@ app.get('/update', async (req, res) => {
 app.get('/playlists', async (req, res) => {
 
     try {
-        const playlists = await withRetry(() => getUserPlaylists());
+        const playlists = await withRetry(() => getUserPlaylists(req.session.access_token ?? ''));
         res.json(playlists);
 
     } 
@@ -301,7 +318,7 @@ app.get('/playlists', async (req, res) => {
 //helpers////////////////////////////////////////////
 
 //gets all active instances of Spotify (must be open or playing music)
-async function getDevices(): Promise<SpotifyDeviceObject[]> {
+async function getDevices(access_token: string): Promise<SpotifyDeviceObject[]> {
     let devices: SpotifyDeviceObject[] = [];
 
     const response = await axios.get('https://api.spotify.com/v1/me/player/devices', {
@@ -315,7 +332,7 @@ async function getDevices(): Promise<SpotifyDeviceObject[]> {
 }
 
 //get user profile
-async function getProfile(): Promise<SpotifyProfile> {
+async function getProfile(access_token :string): Promise<SpotifyProfile> {
     var profile: SpotifyProfile = {
         display_name: "",
         email: "",
@@ -335,7 +352,7 @@ async function getProfile(): Promise<SpotifyProfile> {
 
 //get 50 liked songs ( returns songs either sorted by recently added )
 //offset: integer denoting where to start reading from saved library
-async function getSavedTracks(offset: number): Promise<SpotifyTrack[]> {
+async function getSavedTracks(offset: number, access_token: string): Promise<SpotifyTrack[]> {
     var trackList: SpotifyTrackList = {
         href: "",
         limit: 1,
@@ -367,10 +384,10 @@ async function getSavedTracks(offset: number): Promise<SpotifyTrack[]> {
 }
 
 //put all songs in user's liked songs in an array
-async function getAllSavedTracks(): Promise<SpotifyTrack[]> {
+async function getAllSavedTracks(access_token: string): Promise<SpotifyTrack[]> {
     let offset = 0;
     let allTracks: SpotifyTrack[] = [];
-    let tempTracks = await withRetry(() => getSavedTracks(offset));
+    let tempTracks = await withRetry(() => getSavedTracks(offset, access_token));
 
     //push each batch of 50
     while(tempTracks.length == 50){
@@ -379,7 +396,7 @@ async function getAllSavedTracks(): Promise<SpotifyTrack[]> {
             allTracks.push(item);
         });
         offset = offset + 50;
-        tempTracks = await withRetry(() => getSavedTracks(offset));
+        tempTracks = await withRetry(() => getSavedTracks(offset, access_token));
     }
     //push final batch
     tempTracks.forEach(item => {
@@ -392,7 +409,7 @@ async function getAllSavedTracks(): Promise<SpotifyTrack[]> {
 //get 50 tracks from playlist
 //offset: integer denoting where to start reading from saved library
 //playlist_id: id of spotify playlist to read from
-async function getPlaylistTracks(offset: number, playlist_id: string): Promise<SpotifyTrack[]> {
+async function getPlaylistTracks(offset: number, playlist_id: string, access_token: string): Promise<SpotifyTrack[]> {
     let tracks: SpotifyTrack[] = [];
 
 
@@ -417,10 +434,10 @@ async function getPlaylistTracks(offset: number, playlist_id: string): Promise<S
 
 //put all songs in user's liked songs in an array
 //playlist_id: id of spotify playlist to read from
-async function getAllPlaylistTracks(playlist_id: string): Promise<SpotifyTrack[]> {
+async function getAllPlaylistTracks(playlist_id: string, access_token: string): Promise<SpotifyTrack[]> {
     let offset = 0;
     let allTracks: SpotifyTrack[] = [];
-    let tempTracks = await getPlaylistTracks(offset, playlist_id);
+    let tempTracks = await getPlaylistTracks(offset, playlist_id, access_token);
 
     while(tempTracks.length == 50){
         //push each track to allTracks array
@@ -428,7 +445,7 @@ async function getAllPlaylistTracks(playlist_id: string): Promise<SpotifyTrack[]
             allTracks.push(item);
         });
         offset = offset + 50;
-        tempTracks = await getPlaylistTracks(offset, playlist_id);
+        tempTracks = await getPlaylistTracks(offset, playlist_id, access_token);
     }
     tempTracks.forEach(item => {
         allTracks.push(item);
@@ -439,7 +456,7 @@ async function getAllPlaylistTracks(playlist_id: string): Promise<SpotifyTrack[]
 
 //appends a max of 100 items to a playlist
 //if an item already exists in playlist it will be added again
-async function appendToPlaylist(playlist_id: string, tracks: SpotifyTrack[]) {
+async function appendToPlaylist(playlist_id: string, tracks: SpotifyTrack[], access_token: string) {
 
     if(tracks.length == 0){ 
         throw new Error('No tracks to append');
@@ -470,7 +487,7 @@ async function appendToPlaylist(playlist_id: string, tracks: SpotifyTrack[]) {
     });
 }
 
-async function appendAllPlaylist(playlist_id: string, tracks: SpotifyTrack[]){
+async function appendAllPlaylist(playlist_id: string, tracks: SpotifyTrack[], access_token: string){
     if(tracks.length == 0){ 
         throw new Error('No tracks to append');
     }
@@ -480,13 +497,13 @@ async function appendAllPlaylist(playlist_id: string, tracks: SpotifyTrack[]){
 
     //append batches in 100
     while(temp.length > 0){
-        await withRetry(() => appendToPlaylist(playlist_id, temp));
+        await withRetry(() => appendToPlaylist(playlist_id, temp, access_token));
         offset = offset + 100;
         temp = tracks.slice(offset);
     }
 } 
 
-async function clearPlaylist(playlist_id: string){
+async function clearPlaylist(playlist_id: string, access_token: string){
     let body = {
         uris: []
     }
@@ -501,7 +518,7 @@ async function clearPlaylist(playlist_id: string){
 }
 
 // get all of the current user's playlists
-async function getUserPlaylists(): Promise<SpotifyPlaylist[]> {
+async function getUserPlaylists(access_token: string): Promise<SpotifyPlaylist[]> {
     let playlists: SpotifyPlaylist[] = [];
     let offset = 0;
 
