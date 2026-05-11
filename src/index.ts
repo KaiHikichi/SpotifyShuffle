@@ -13,15 +13,14 @@ import session from 'express-session';
 const client_id = process.env.client_id ?? '';
 const client_secret = process.env.client_secret ?? '';
 //const playlist_id = process.env.playlist_id ?? '';
-let playlist_id = '4d3BQUdCNhgBOKbNde214u';
+//let playlist_id = '4d3BQUdCNhgBOKbNde214u';
+let playlist_id: any;
 const port = process.env.PORT ?? 8888;
 
 const isProduction = process.env.NODE_ENV === 'production';
 const redirect_uri = isProduction
     ? 'https://spotifyshuffle-production.up.railway.app/callback'
     : 'http://127.0.0.1:8888/callback';
-
-
 
 //run the server
 const app = express();
@@ -161,9 +160,6 @@ app.get('/callback', async function(req, res) {
 
         req.session.access_token = response.data.access_token;
 
-        console.log('Token set in callback:', req.session.access_token);
-        console.log('Session ID in callback:', req.sessionID);
-
         const homeUrl = isProduction
             ? 'https://spotifyshuffle-production.up.railway.app/home'
             : 'http://127.0.0.1:8888/home';
@@ -204,18 +200,25 @@ app.get('/home', async (req, res) => {
 //shuffle page
 app.get('/shuffle', async (req, res) => {
 
-    const playlist_id = req.query.playlist_id;
+    //get selected playlist
+    playlist_id = req.query.playlist_id;
+
     if (!playlist_id || typeof playlist_id !== 'string') {
         return res.status(400).send('Missing playlist_id');
     }
 
     try {
-
+        //get all tracks on selected playlist
         let allPlaylistTracks: SpotifyTrack[] = await getAllPlaylistTracks(playlist_id, req.session.access_token ?? '');
+
+        //clear the playlist
         await withRetry(() => clearPlaylist(playlist_id, req.session.access_token ?? ''));        
+
+        //shuffle and populate playlist
         let shuffledTracks = shuffleArray(allPlaylistTracks);
         await appendAllPlaylist(playlist_id, shuffledTracks, req.session.access_token ?? '');
 
+        //redirect to home
         const homeUrl = isProduction
             ? 'https://spotifyshuffle-production.up.railway.app/home'
             : 'http://127.0.0.1:8888/home';
@@ -230,8 +233,6 @@ app.get('/shuffle', async (req, res) => {
 
 //user page
 app.get('/user', async (req, res) => {
-    console.log('Session ID:', req.sessionID);
-    console.log('Access token:', req.session.access_token);
 
     if (!req.session.access_token) {
         return res.json({ loggedIn: false });
@@ -250,7 +251,9 @@ app.get('/user', async (req, res) => {
 //clear page
 app.get('/clear', async (req, res) => {
 
-    const playlist_id = req.query.playlist_id;
+    //get selected playlist
+    playlist_id = req.query.playlist_id;
+
     if (!playlist_id || typeof playlist_id !== 'string') {
         return res.status(400).send('Missing playlist_id');
     }
@@ -276,14 +279,31 @@ app.get('/clear', async (req, res) => {
 //update page
 app.get('/update', async (req, res) => {
 
-    try {
-        res.send("under construction");
+    //get selected playlist
+    playlist_id = req.query.playlist_id;
 
-        /* 
-        let allSavedTracks: SpotifyTrack[] = await getAllSavedTracks();
-        await appendAllPlaylist(playlist_id, allSavedTracks);
-        res.send(`Updated`);
-        */
+    if (!playlist_id || typeof playlist_id !== 'string') {
+        return res.status(400).send('Missing playlist_id');
+    }
+
+    try {
+
+        //get all saved tracks
+        let allSavedTracks: SpotifyTrack[] = await getAllSavedTracks(req.session.access_token ?? '');
+
+        //clear the playlist
+        await withRetry(() => clearPlaylist(playlist_id, req.session.access_token ?? '')); 
+        
+        //shuffle and populate playlist
+        let shuffledTracks = shuffleArray(allSavedTracks);
+        await appendAllPlaylist(playlist_id, shuffledTracks, req.session.access_token ?? '');
+
+        //redirect to home
+        const homeUrl = isProduction
+            ? 'https://spotifyshuffle-production.up.railway.app/home'
+            : 'http://127.0.0.1:8888/home';
+        res.redirect(`${homeUrl}?updated=1`);
+       
     } 
     catch (error: unknown) {
         handleError(error);
